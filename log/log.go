@@ -34,21 +34,25 @@ var (
 
 // Options Structure
 type Options struct {
-	GRPC          string
-	MsgPath       string
-	LogPath       string
-	LogFilter     string
-	JSON          bool
-	Namespace     string
-	LogType       string
-	Operation     string
-	ContainerName string
-	PodName       string
-	Source        string
-	Resource      string
-	Limit         uint32
-	Selector      []string
-	EventChan     chan EventInfo // channel to send events on
+	GRPC             string
+	Insecure         bool
+	TlsCertPath      string
+	TlsCertProvider  string
+	ReadCAFromSecret bool
+	MsgPath          string
+	LogPath          string
+	LogFilter        string
+	JSON             bool
+	Namespace        string
+	LogType          string
+	Operation        string
+	ContainerName    string
+	PodName          string
+	Source           string
+	Resource         string
+	Limit            uint32
+	Selector         []string
+	EventChan        chan EventInfo // channel to send events on
 }
 
 // StopChan Channel
@@ -144,7 +148,7 @@ func StartObserver(c *k8s.Client, o Options) error {
 	}
 
 	// create client
-	logClient := NewClient(gRPC, o.MsgPath, o.LogPath, o.LogFilter, o.Limit)
+	logClient := NewClient(gRPC, o, c.K8sClientset)
 	if logClient == nil {
 		return errors.New("unable to create log client")
 	}

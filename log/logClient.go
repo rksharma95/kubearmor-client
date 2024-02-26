@@ -19,6 +19,9 @@ import (
 	pb "github.com/kubearmor/KubeArmor/protobuf"
 	"golang.org/x/exp/slices"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/credentials/insecure"
+	"k8s.io/client-go/kubernetes"
 )
 
 // EventInfo Event data signalled on EventChan
@@ -100,16 +103,26 @@ type Feeder struct {
 }
 
 // NewClient Function
-func NewClient(server, msgPath, logPath, logFilter string, limit uint32) *Feeder {
+func NewClient(server string, o Options, c kubernetes.Interface) *Feeder {
 	fd := &Feeder{}
 
 	fd.Running = true
 
 	fd.server = server
 
-	fd.limit = limit
+	fd.limit = o.Limit
 
-	conn, err := grpc.Dial(fd.server, grpc.WithInsecure())
+	var creds credentials.TransportCredentials
+	if !o.Insecure {
+		tlsCreds, err := loadTLSCredentials(c, o)
+		if err != nil {
+			return nil
+		}
+		creds = tlsCreds
+	} else {
+		creds = insecure.NewCredentials()
+	}
+	conn, err := grpc.Dial(fd.server, grpc.WithTransportCredentials(creds))
 	if err != nil {
 		return nil
 	}
@@ -120,7 +133,7 @@ func NewClient(server, msgPath, logPath, logFilter string, limit uint32) *Feeder
 	msgIn := pb.RequestMessage{}
 	msgIn.Filter = ""
 
-	if msgPath != "none" {
+	if o.MsgPath != "none" {
 		msgStream, err := fd.client.WatchMessages(context.Background(), &msgIn)
 		if err != nil {
 			return nil
@@ -129,9 +142,9 @@ func NewClient(server, msgPath, logPath, logFilter string, limit uint32) *Feeder
 	}
 
 	alertIn := pb.RequestMessage{}
-	alertIn.Filter = logFilter
+	alertIn.Filter = o.LogFilter
 
-	if logPath != "none" && (alertIn.Filter == "all" || alertIn.Filter == "policy") {
+	if o.LogPath != "none" && (alertIn.Filter == "all" || alertIn.Filter == "policy") {
 		alertStream, err := fd.client.WatchAlerts(context.Background(), &alertIn)
 		if err != nil {
 			return nil
@@ -140,9 +153,9 @@ func NewClient(server, msgPath, logPath, logFilter string, limit uint32) *Feeder
 	}
 
 	logIn := pb.RequestMessage{}
-	logIn.Filter = logFilter
+	logIn.Filter = o.LogFilter
 
-	if logPath != "none" && (logIn.Filter == "all" || logIn.Filter == "system") {
+	if o.LogPath != "none" && (logIn.Filter == "all" || logIn.Filter == "system") {
 		logStream, err := fd.client.WatchLogs(context.Background(), &logIn)
 		if err != nil {
 			return nil
